@@ -80,17 +80,29 @@ class SimpleNeuralNetwork:
         self.output_layer.set_params(params['output_layer'])
 
     def save(self, filename="model_weights.pkl"):
+        params = self.get_all_params()
         with open(filename, 'wb') as f:
-            pickle.dump(self.get_all_params(), f)
+            pickle.dump(params, f)
+        print(f"[SAVE] Model saved to '{filename}'")
+        for layer_name, layer_params in params.items():
+            w = layer_params['weights']
+            b = layer_params['biases']
+            print(f"[SAVE] {layer_name} weights (preview):\n{w[:3, :5]}")
+            print(f"[SAVE] {layer_name} biases (preview):\n{b[:5]}")
 
     def load(self, filename="model_weights.pkl"):
         if os.path.exists(filename):
             with open(filename, 'rb') as f:
                 params = pickle.load(f)
                 self.set_all_params(params)
-                print("Model parameters loaded.")
+            print(f"[LOAD] Model loaded from '{filename}'")
+            for layer_name, layer_params in params.items():
+                w = layer_params['weights']
+                b = layer_params['biases']
+                print(f"[LOAD] {layer_name} weights (preview):\n{w[:3, :5]}")
+                print(f"[LOAD] {layer_name} biases (preview):\n{b[:5]}")
         else:
-            print("No saved model found. Starting from scratch.")
+            print(f"[LOAD] No saved model found at '{filename}'. Starting from scratch.")
 
     def train(self, x_train, y_train, epochs=100, learning_rate=0.01, checkpoint_interval=10):
         for epoch in range(epochs):
@@ -111,7 +123,7 @@ class SimpleNeuralNetwork:
 network = SimpleNeuralNetwork(input_dim=10)
 network.load("model_weights.pkl")  # załaduj model jeśli istnieje
 
-measured, real = file_reader.read_from_file("./f8_1p.xlsx")
+measured, real = file_reader.read_all_static_files_from_directory("data", 0)
 
 measured_mean = np.mean(measured, axis=0)
 measured_std = np.std(measured, axis=0)
