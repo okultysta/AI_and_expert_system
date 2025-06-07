@@ -1,126 +1,60 @@
 # Re-importy i re-definicje po resecie środowiska
 
 import numpy as np
-import pickle
-import os
 import file_reader
+import matplotlib.pyplot as plt
+import network_file
 
-# Funkcje aktywacji i pochodne
-def relu(x):
-    return np.maximum(0, x)
 
-def relu_derivative(x):
-    return (x > 0).astype(float)
+def plot_xy_comparison(measured, predicted, reference, filename="trajektoria_test_random.png"):
+    plt.figure(figsize=(12, 7))
 
-def linear(x):
-    return x
+    plt.plot(reference[:, 0], reference[:, 1], label="Rzeczywista", color='gold', linewidth=2, zorder=1)
+    plt.plot(measured[:, 0], measured[:, 1], 'r.', label="Zmierzona (UWB)", markersize=4, zorder=2)
+    plt.plot(predicted[:, 0], predicted[:, 1], 'b.', label="Po korekcji (sieć)", markersize=4, zorder=3)
 
-def linear_derivative(x):
-    return np.ones_like(x)
+    plt.xlabel("X [mm]")
+    plt.ylabel("Y [mm]")
+    plt.title("Porównanie trajektorii: zmierzona vs poprawiona vs rzeczywista")
+    plt.legend()
+    plt.grid(True)
+    plt.axis("equal")
+    plt.tight_layout()
+    plt.savefig(filename, dpi=300)
+    print(f"Wykres trajektorii zapisany jako '{filename}'")
+    plt.close()
 
-# Warstwa Dense z możliwością zapisu i wczytywania
-class DenseLayer:
-    def __init__(self, input_dim, output_dim, activation=linear, activation_derivative=None):
-        self.weights = np.random.randn(input_dim, output_dim) * np.sqrt(2. / input_dim)
-        self.biases = np.zeros(output_dim)
-        self.activation = activation
-        self.activation_derivative = activation_derivative
 
-    def forward(self, x):
-        self.input = x
-        self.z = np.dot(x, self.weights) + self.biases
-        self.output = self.activation(self.z)
-        return self.output
+def test_model_on_random(network, measured_mean, measured_std, real_mean, real_std):
+    print("\n--- TESTOWANIE MODELU NA DANYCH 'RANDOM' ---")
+    measured_test, real_test = file_reader.read_all_static_files_from_directory("data", 1)
 
-    def backward(self, grad_output, learning_rate):
-        grad_activation = grad_output * self.activation_derivative(self.z)
-        grad_weights = np.outer(self.input, grad_activation)
-        grad_biases = grad_activation
-        grad_input = np.dot(self.weights, grad_activation)
+    if measured_test is None or real_test is None:
+        print("Brak danych testowych typu 'random'.")
+        return
 
-        self.weights -= learning_rate * grad_weights
-        self.biases -= learning_rate * grad_biases
+    # Normalizacja danymi ze zbioru treningowego
+    measured_test_norm = (measured_test - measured_mean) / measured_std
 
-        return grad_input
+    # Przewidywanie
+    predictions_norm = np.array([network.forward(x) for x in measured_test_norm])
+    predictions = predictions_norm * real_std + real_mean  # denormalizacja
 
-    def get_params(self):
-        return {'weights': self.weights, 'biases': self.biases}
+    # Błąd euklidesowy
+    diffs = predictions - real_test
+    errors = np.linalg.norm(diffs, axis=1)
 
-    def set_params(self, params):
-        self.weights = params['weights']
-        self.biases = params['biases']
+    print("\nStatystyki błędu na zbiorze 'random':")
+    print(f"Średni błąd: {np.mean(errors):.4f}")
+    print(f"Mediana błędu: {np.median(errors):.4f}")
+    print(f"95 percentyl błędu: {np.percentile(errors, 95):.4f}")
+    # Rysowanie porównania
+    plot_xy_comparison(measured_test, predictions, real_test, filename="trajektoria_test_random.png")
 
-# Sieć neuronowa z obsługą zapisu/odczytu
-class SimpleNeuralNetwork:
-    def __init__(self, input_dim):
-        self.layer1 = DenseLayer(input_dim, 64, activation=relu, activation_derivative=relu_derivative)
-        self.layer2 = DenseLayer(64, 32, activation=relu, activation_derivative=relu_derivative)
-        self.output_layer = DenseLayer(32, 2, activation=linear, activation_derivative=linear_derivative)
 
-    def forward(self, x):
-        x = self.layer1.forward(x)
-        x = self.layer2.forward(x)
-        return self.output_layer.forward(x)
 
-    def backward(self, loss_grad, learning_rate):
-        grad = self.output_layer.backward(loss_grad, learning_rate)
-        grad = self.layer2.backward(grad, learning_rate)
-        self.layer1.backward(grad, learning_rate)
 
-    def get_all_params(self):
-        return {
-            'layer1': self.layer1.get_params(),
-            'layer2': self.layer2.get_params(),
-            'output_layer': self.output_layer.get_params()
-        }
-
-    def set_all_params(self, params):
-        self.layer1.set_params(params['layer1'])
-        self.layer2.set_params(params['layer2'])
-        self.output_layer.set_params(params['output_layer'])
-
-    def save(self, filename="model_weights.pkl"):
-        params = self.get_all_params()
-        with open(filename, 'wb') as f:
-            pickle.dump(params, f)
-        print(f"[SAVE] Model saved to '{filename}'")
-        for layer_name, layer_params in params.items():
-            w = layer_params['weights']
-            b = layer_params['biases']
-            print(f"[SAVE] {layer_name} weights (preview):\n{w[:3, :5]}")
-            print(f"[SAVE] {layer_name} biases (preview):\n{b[:5]}")
-
-    def load(self, filename="model_weights.pkl"):
-        if os.path.exists(filename):
-            with open(filename, 'rb') as f:
-                params = pickle.load(f)
-                self.set_all_params(params)
-            print(f"[LOAD] Model loaded from '{filename}'")
-            for layer_name, layer_params in params.items():
-                w = layer_params['weights']
-                b = layer_params['biases']
-                print(f"[LOAD] {layer_name} weights (preview):\n{w[:3, :5]}")
-                print(f"[LOAD] {layer_name} biases (preview):\n{b[:5]}")
-        else:
-            print(f"[LOAD] No saved model found at '{filename}'. Starting from scratch.")
-
-    def train(self, x_train, y_train, epochs=100, learning_rate=0.01, checkpoint_interval=10):
-        for epoch in range(epochs):
-            total_loss = 0
-            for x, y_true in zip(x_train, y_train):
-                y_pred = self.forward(x)
-                loss = np.mean((y_pred - y_true) ** 2)
-                total_loss += loss
-                loss_grad = 2 * (y_pred - y_true) / y_true.size
-                self.backward(loss_grad, learning_rate)
-            avg_loss = total_loss / len(x_train)
-            print(f"Epoch {epoch + 1}: Loss = {avg_loss:.6f}")
-
-            if (epoch + 1) % checkpoint_interval == 0:
-                self.save(f"model_weights_epoch_{epoch + 1}.pkl")
-                print(f"Checkpoint saved at epoch {epoch + 1}.")
-
-network = SimpleNeuralNetwork(input_dim=10)
+network = network_file.SimpleNeuralNetwork(input_dim=2)
 network.load("model_weights.pkl")  # załaduj model jeśli istnieje
 
 measured, real = file_reader.read_all_static_files_from_directory("data", 0)
@@ -136,7 +70,6 @@ real_std[real_std == 0] = 1
 measured_norm = (measured - measured_mean) / measured_std
 real_norm = (real - real_mean) / real_std
 
-
-network = SimpleNeuralNetwork(input_dim=10)
-network.train(measured_norm, real_norm, epochs=50, learning_rate=0.01)
+network.train(measured_norm, real_norm, epochs=50, learning_rate=0.001)
 network.save("model_weights.pkl")  # końcowy zapis wag
+test_model_on_random(network, measured_mean, measured_std, real_mean, real_std)
