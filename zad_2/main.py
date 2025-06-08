@@ -4,7 +4,36 @@ import numpy as np
 import file_reader
 import matplotlib.pyplot as plt
 import network_file
+import pandas as pd
 
+# def save_and_plot_cdf_before_filtering(measured, real):
+#     print("\n--- DYSTRYBUANTA PRZED FILTRACJĄ ---")
+#
+#     # Oblicz błąd euklidesowy dla każdej próbki (bez filtracji)
+#     diffs = measured - real
+#     errors = np.linalg.norm(diffs, axis=1)
+#
+#     # Posortuj błędy i oblicz dystrybuantę
+#     sorted_errors = np.sort(errors)
+#     cdf = np.arange(1, len(sorted_errors) + 1) / len(sorted_errors)
+#
+#     # Zapis do pliku Excel
+#     df = pd.DataFrame({'Dystrybuanta_przed_filtracja': cdf})
+#     df.to_excel("dystrybuanta_przed_filtracja.xlsx", index=False)
+#     print("Zapisano plik 'dystrybuanta_przed_filtracja.xlsx'.")
+#
+#     # Wykres
+#     plt.figure(figsize=(8, 5))
+#     plt.plot(sorted_errors, cdf, label='Dystrybuanta błędu (przed filtracją)', color='red')
+#     plt.xlabel("Błąd euklidesowy")
+#     plt.ylabel("Dystrybuanta")
+#     plt.title("Dystrybuanta błędu pomiarowego przed filtracją")
+#     plt.grid(True)
+#     plt.legend()
+#     plt.tight_layout()
+#     plt.savefig("cdf_przed_filtracja.png")
+#     print("Zapisano wykres 'cdf_przed_filtracja.png'.")
+#     plt.close()
 
 def plot_xy_comparison(measured, predicted, reference, filename="trajektoria_test_random.png"):
     plt.figure(figsize=(12, 7))
@@ -26,6 +55,7 @@ def plot_xy_comparison(measured, predicted, reference, filename="trajektoria_tes
 
 
 def test_model_on_random(network, measured_mean, measured_std, real_mean, real_std):
+
     print("\n--- TESTOWANIE MODELU NA DANYCH 'RANDOM' ---")
     measured_test, real_test = file_reader.read_all_static_files_from_directory("data", 1)
 
@@ -48,7 +78,28 @@ def test_model_on_random(network, measured_mean, measured_std, real_mean, real_s
     print(f"Średni błąd: {np.mean(errors):.4f}")
     print(f"Mediana błędu: {np.median(errors):.4f}")
     print(f"95 percentyl błędu: {np.percentile(errors, 95):.4f}")
-    # Rysowanie porównania
+
+    sorted_errors = np.sort(errors)
+    dystrybuanta = np.arange(1, len(errors) + 1) / len(errors)
+
+    df = pd.DataFrame({
+        "Dystrybuanta": dystrybuanta
+    })
+    df.to_excel("dystrybuanta_random.xlsx", index=False)
+    print("Zapisano dystrybuantę błędu do pliku 'dystrybuanta_random.xlsx'")
+
+    # Wykres dystrybuanty
+    plt.figure(figsize=(8, 4))
+    plt.plot(dystrybuanta, marker='o', linestyle='-', markersize=2)
+    plt.title("Dystrybuanta błędu – dane 'random'")
+    plt.xlabel("Numer próbki")
+    plt.ylabel("Błąd euklidesowy")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("wykres_dystrybuanta_random.png")
+    plt.close()
+    print("✅ Wykres zapisany jako wykres_dystrybuanta_random.png")
+
     plot_xy_comparison(measured_test, predictions, real_test, filename="trajektoria_test_random.png")
 
 
@@ -72,4 +123,6 @@ real_norm = (real - real_mean) / real_std
 
 network.train(measured_norm, real_norm, epochs=50, learning_rate=0.001)
 network.save("model_weights.pkl")  # końcowy zapis wag
+# measured, real = file_reader.read_all_static_files_from_directory("data", 1)
+# save_and_plot_cdf_before_filtering(measured, real)
 test_model_on_random(network, measured_mean, measured_std, real_mean, real_std)
