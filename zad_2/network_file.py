@@ -15,6 +15,20 @@ def linear(x):
 def linear_derivative(x):
     return np.ones_like(x)
 
+def tanh(x):
+    return np.tanh(x)
+
+def tanh_derivative(x):
+    return 1 - np.tanh(x) ** 2
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def sigmoid_derivative(x):
+    s = sigmoid(x)
+    return s * (1 - s)
+
+
 # Warstwa Dense z możliwością zapisu i wczytywania
 class DenseLayer:
     def __init__(self, input_dim, output_dim, activation=linear, activation_derivative=None):
@@ -50,17 +64,21 @@ class DenseLayer:
 # Sieć neuronowa z obsługą zapisu/odczytu
 class SimpleNeuralNetwork:
     def __init__(self, input_dim):
-        self.layer1 = DenseLayer(input_dim, 64, activation=relu, activation_derivative=relu_derivative)
-        self.layer2 = DenseLayer(64, 32, activation=relu, activation_derivative=relu_derivative)
+        # Przykładowa struktura z 3 warstwami
+        self.layer1 = DenseLayer(input_dim, 128, activation=sigmoid, activation_derivative=sigmoid_derivative)
+        self.layer2 = DenseLayer(128, 64, activation=sigmoid, activation_derivative=sigmoid_derivative)
+        self.layer3 = DenseLayer(64, 32, activation=sigmoid, activation_derivative=sigmoid_derivative)
         self.output_layer = DenseLayer(32, 2, activation=linear, activation_derivative=linear_derivative)
 
     def forward(self, x):
         x = self.layer1.forward(x)
         x = self.layer2.forward(x)
+        x = self.layer3.forward(x)
         return self.output_layer.forward(x)
 
     def backward(self, loss_grad, learning_rate):
         grad = self.output_layer.backward(loss_grad, learning_rate)
+        grad = self.layer3.backward(grad, learning_rate)
         grad = self.layer2.backward(grad, learning_rate)
         self.layer1.backward(grad, learning_rate)
 
