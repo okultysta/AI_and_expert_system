@@ -54,16 +54,26 @@ def plot_xy_comparison(measured, predicted, reference, filename="trajektoria_tes
     plt.close()
 
 
-def test_model_on_random(network, measured_mean, measured_std, real_mean, real_std):
+def test_model(network, measured_mean, measured_std, real_mean, real_std, test_type="random"):
+    print(f"\n--- TESTOWANIE MODELU NA DANYCH: '{test_type.upper()}' ---")
 
-    print("\n--- TESTOWANIE MODELU NA DANYCH 'RANDOM' ---")
-    measured_test, real_test = file_reader.read_all_static_files_from_directory("data", 1)
-
-    if measured_test is None or real_test is None:
-        print("Brak danych testowych typu 'random'.")
+    if test_type == "random":
+        file_type = 1
+        prefix = "random"
+    elif test_type == "dynamic":
+        file_type = 3
+        prefix = "dynamic"
+    else:
+        print(f"Błąd: nieznany typ testu '{test_type}'. Użyj 'random' lub 'dynamic'.")
         return
 
-    # Normalizacja danymi ze zbioru treningowego
+    measured_test, real_test = file_reader.read_all_static_files_from_directory("data", file_type)
+
+    if measured_test is None or real_test is None:
+        print(f"Brak danych testowych typu '{test_type}'.")
+        return
+
+    # Normalizacja
     measured_test_norm = (measured_test - measured_mean) / measured_std
 
     # Przewidywanie
@@ -74,35 +84,38 @@ def test_model_on_random(network, measured_mean, measured_std, real_mean, real_s
     diffs = predictions - real_test
     errors = np.linalg.norm(diffs, axis=1)
 
-    print("\nStatystyki błędu na zbiorze 'random':")
+    print(f"\n📊 Statystyki błędu ({test_type}):")
     print(f"Średni błąd: {np.mean(errors):.4f}")
-    print(f"Mediana błędu: {np.median(errors):.4f}")
+    print(f"Mediana błądu: {np.median(errors):.4f}")
     print(f"95 percentyl błędu: {np.percentile(errors, 95):.4f}")
 
+    # Dystrybuanta błędu
     sorted_errors = np.sort(errors)
     dystrybuanta = np.arange(1, len(errors) + 1) / len(errors)
 
     df = pd.DataFrame({
         "Dystrybuanta": dystrybuanta
     })
-    df.to_excel("dystrybuanta_random.xlsx", index=False)
-    print("Zapisano dystrybuantę błędu do pliku 'dystrybuanta_random.xlsx'")
+    df.to_excel(f"dystrybuanta_{prefix}.xlsx", index=False)
+    print(f"📁 Zapisano dystrybuantę błędu do pliku 'dystrybuanta_{prefix}.xlsx'")
 
     # Wykres dystrybuanty
     plt.figure(figsize=(8, 4))
-    plt.plot(dystrybuanta, marker='o', linestyle='-', markersize=2)
-    plt.title("Dystrybuanta błędu – dane 'random'")
-    plt.xlabel("Numer próbki")
-    plt.ylabel("Błąd euklidesowy")
+    plt.plot(sorted_errors, dystrybuanta, marker='o', linestyle='-', markersize=2)
+    plt.title(f"Dystrybuanta błędu – dane '{prefix}'")
+    plt.xlabel("Błąd euklidesowy [mm]")
+    plt.ylabel("CDF")
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("wykres_dystrybuanta_random.png")
+    plt.savefig(f"wykres_dystrybuanta_{prefix}.png")
     plt.close()
-    print("✅ Wykres zapisany jako wykres_dystrybuanta_random.png")
+    print(f"✅ Wykres zapisany jako 'wykres_dystrybuanta_{prefix}.png'")
 
-    plot_xy_comparison(measured_test, predictions, real_test, filename="trajektoria_test_random.png")
+    # Wykres trajektorii
+    plot_xy_comparison(measured_test, predictions, real_test, filename=f"trajektoria_test_{prefix}.png")
 
 
+training = input("Czy chcesz trenować model?[Y/N]:")
 
 
 network = network_file.SimpleNeuralNetwork(input_dim=2)
@@ -121,8 +134,10 @@ real_std[real_std == 0] = 1
 measured_norm = (measured - measured_mean) / measured_std
 real_norm = (real - real_mean) / real_std
 
-network.train(measured_norm, real_norm, epochs=50, learning_rate=0.001)
-network.save("model_weights.pkl")  # końcowy zapis wag
+if training == "Y" or training == "y":
+    network.train(measured_norm, real_norm, epochs=50, learning_rate=0.001)
+    network.save("model_weights.pkl")  # końcowy zapis wag
 # measured, real = file_reader.read_all_static_files_from_directory("data", 1)
 # save_and_plot_cdf_before_filtering(measured, real)
-test_model_on_random(network, measured_mean, measured_std, real_mean, real_std)
+test_model(network, measured_mean, measured_std, real_mean, real_std, test_type="random")
+test_model(network, measured_mean, measured_std, real_mean, real_std, test_type="dynamic")
