@@ -5,6 +5,7 @@ import file_reader
 import matplotlib.pyplot as plt
 import network_file
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 
 def save_and_plot_cdf_before_filtering(measured, real):
     print("\n--- DYSTRYBUANTA PRZED FILTRACJĄ ---")
@@ -54,7 +55,7 @@ def plot_xy_comparison(measured, predicted, reference, filename="trajektoria_tes
     plt.close()
 
 
-def test_model(network, measured_mean, measured_std, real_mean, real_std, test_type="random"):
+def test_model(network, input_scaler, output_scaler, test_type="random"):
     print(f"\n--- TESTOWANIE MODELU NA DANYCH: '{test_type.upper()}' ---")
 
     if test_type == "random":
@@ -74,45 +75,54 @@ def test_model(network, measured_mean, measured_std, real_mean, real_std, test_t
         return
 
     # Normalizacja
-    measured_test_norm = (measured_test - measured_mean) / measured_std
+    measured_test_norm = input_scaler.transform(measured_test)
 
-    # Przewidywanie
+    # Przewidywanie i denormalizacja
     predictions_norm = np.array([network.forward(x) for x in measured_test_norm])
-    predictions = predictions_norm * real_std + real_mean  # denormalizacja
+    predictions = output_scaler.inverse_transform(predictions_norm)
 
-    # Błąd euklidesowy
-    diffs = predictions - real_test
-    errors = np.linalg.norm(diffs, axis=1)
+    # Błędy: przed i po filtracji
+    errors_before = np.linalg.norm(measured_test - real_test, axis=1)
+    errors_after = np.linalg.norm(predictions - real_test, axis=1)
 
     print(f"\n📊 Statystyki błędu ({test_type}):")
-    print(f"Średni błąd: {np.mean(errors):.4f}")
-    print(f"Mediana błądu: {np.median(errors):.4f}")
-    print(f"95 percentyl błędu: {np.percentile(errors, 95):.4f}")
+    print(f"Średni błąd PRZED filtracją: {np.mean(errors_before):.4f}")
+    print(f"Średni błąd PO filtracji:    {np.mean(errors_after):.4f}")
+    print(f"95 percentyl PRZED: {np.percentile(errors_before, 95):.4f}")
+    print(f"95 percentyl PO:    {np.percentile(errors_after, 95):.4f}")
 
-    # Dystrybuanta błędu
-    sorted_errors = np.sort(errors)
-    dystrybuanta = np.arange(1, len(errors) + 1) / len(errors)
+    # Dystrybuanty
+    sorted_before = np.sort(errors_before)
+    sorted_after = np.sort(errors_after)
+    cdf = np.arange(1, len(sorted_before) + 1) / len(sorted_before)
 
+    # Zapis do pliku
     df = pd.DataFrame({
-        "Dystrybuanta": dystrybuanta
+        "Błąd_przed": sorted_before,
+        "CDF_przed": cdf,
+        "Błąd_po": sorted_after,
+        "CDF_po": cdf
     })
     df.to_excel(f"dystrybuanta_{prefix}.xlsx", index=False)
-    print(f"📁 Zapisano dystrybuantę błędu do pliku 'dystrybuanta_{prefix}.xlsx'")
+    print(f"📁 Zapisano dystrybuanty do pliku 'dystrybuanta_{prefix}.xlsx'")
 
     # Wykres dystrybuanty
-    plt.figure(figsize=(8, 4))
-    plt.plot(sorted_errors, dystrybuanta, marker='o', linestyle='-', markersize=2)
-    plt.title(f"Dystrybuanta błędu – dane '{prefix}'")
+    plt.figure(figsize=(8, 5))
+    plt.plot(sorted_before, cdf, 'r--', label='Przed filtracją')
+    plt.plot(sorted_after, cdf, 'b-', label='Po filtracji')
     plt.xlabel("Błąd euklidesowy [mm]")
-    plt.ylabel("CDF")
+    plt.ylabel("Dystrybuanta (CDF)")
+    plt.title(f"Porównanie dystrybuanty – {prefix}")
     plt.grid(True)
+    plt.legend()
     plt.tight_layout()
-    plt.savefig(f"wykres_dystrybuanta_{prefix}.png")
+    plt.savefig(f"cdf_{prefix}.png")
+    print(f"✅ Wykres zapisany jako 'cdf_{prefix}.png'")
     plt.close()
-    print(f"✅ Wykres zapisany jako 'wykres_dystrybuanta_{prefix}.png'")
 
     # Wykres trajektorii
     plot_xy_comparison(measured_test, predictions, real_test, filename=f"trajektoria_test_{prefix}.png")
+
 
 
 training = input("Czy chcesz trenować model?[Y/N]:")
@@ -123,21 +133,17 @@ network.load("model_weights.pkl")  # załaduj model jeśli istnieje
 
 measured, real = file_reader.read_all_static_files_from_directory("data", 0)
 
-measured_mean = np.mean(measured, axis=0)
-measured_std = np.std(measured, axis=0)
-measured_std[measured_std == 0] = 1  # unikanie dzielenia przez 0
+input_scaler = StandardScaler()
+output_scaler = StandardScaler()
 
-real_mean = np.mean(real, axis=0)
-real_std = np.std(real, axis=0)
-real_std[real_std == 0] = 1
-
-measured_norm = (measured - measured_mean) / measured_std
-real_norm = (real - real_mean) / real_std
+measured_norm = input_scaler.fit_transform(measured)
+real_norm = output_scaler.fit_transform(real)
 
 if training == "Y" or training == "y":
-    network.train(measured_norm, real_norm, epochs=20, learning_rate=0.001)
+    network.train(measured_norm, real_norm, epochs=2, learning_rate=0.001)
     network.save("model_weights.pkl")  # końcowy zapis wag
 measured, real = file_reader.read_all_static_files_from_directory("data", 1)
 save_and_plot_cdf_before_filtering(measured, real)
-test_model(network, measured_mean, measured_std, real_mean, real_std, test_type="random")
-test_model(network, measured_mean, measured_std, real_mean, real_std, test_type="dynamic")
+test_model(network, input_scaler, output_scaler, test_type="random")
+test_model(network, input_scaler, output_scaler, test_type="dynamic")
+
