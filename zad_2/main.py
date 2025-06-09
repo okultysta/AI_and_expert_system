@@ -5,6 +5,8 @@ import file_reader
 import matplotlib.pyplot as plt
 import network_file
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
+
 
 # def save_and_plot_cdf_before_filtering(measured, real):
 #     print("\n--- DYSTRYBUANTA PRZED FILTRACJĄ ---")
@@ -53,8 +55,7 @@ def plot_xy_comparison(measured, predicted, reference, filename="trajektoria_tes
     print(f"Wykres trajektorii zapisany jako '{filename}'")
     plt.close()
 
-
-def test_model(network, measured_mean, measured_std, real_mean, real_std, test_type="random"):
+def test_model(network, input_scaler, output_scaler, name, test_type="random"):
     print(f"\n--- TESTOWANIE MODELU NA DANYCH: '{test_type.upper()}' ---")
 
     if test_type == "random":
@@ -74,11 +75,11 @@ def test_model(network, measured_mean, measured_std, real_mean, real_std, test_t
         return
 
     # Normalizacja
-    measured_test_norm = (measured_test - measured_mean) / measured_std
+    measured_test_norm = input_scaler.transform(measured_test)
 
     # Przewidywanie
     predictions_norm = np.array([network.forward(x) for x in measured_test_norm])
-    predictions = predictions_norm * real_std + real_mean  # denormalizacja
+    predictions = output_scaler.inverse_transform(predictions_norm)
 
     # Błąd euklidesowy
     diffs = predictions - real_test
@@ -107,12 +108,12 @@ def test_model(network, measured_mean, measured_std, real_mean, real_std, test_t
     plt.ylabel("CDF")
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(f"wykres_dystrybuanta_{prefix}.png")
+    plt.savefig(f"wykres_dystrybuanta_{prefix}_{name}.png")
     plt.close()
     print(f"✅ Wykres zapisany jako 'wykres_dystrybuanta_{prefix}.png'")
 
     # Wykres trajektorii
-    plot_xy_comparison(measured_test, predictions, real_test, filename=f"trajektoria_test_{prefix}.png")
+    plot_xy_comparison(measured_test, predictions, real_test, filename=f"trajektoria_test_{prefix}_{name}.png")
 
 
 training = input("Czy chcesz trenować model?[Y/N]:")
@@ -123,21 +124,73 @@ network.load("model_weights.pkl")  # załaduj model jeśli istnieje
 
 measured, real = file_reader.read_all_static_files_from_directory("data", 0)
 
-measured_mean = np.mean(measured, axis=0)
-measured_std = np.std(measured, axis=0)
-measured_std[measured_std == 0] = 1  # unikanie dzielenia przez 0
+input_scaler = StandardScaler()
+output_scaler = StandardScaler()
 
-real_mean = np.mean(real, axis=0)
-real_std = np.std(real, axis=0)
-real_std[real_std == 0] = 1
-
-measured_norm = (measured - measured_mean) / measured_std
-real_norm = (real - real_mean) / real_std
+measured_norm = input_scaler.fit_transform(measured)
+real_norm = output_scaler.fit_transform(real)
 
 if training == "Y" or training == "y":
+    network.train(measured_norm, real_norm, epochs=10, learning_rate=0.005)
+    network.save("model_weights1.pkl")  # końcowy zapis wag
+    test_model(network, input_scaler, output_scaler, "1",test_type="random")
+    test_model(network, input_scaler, output_scaler, "1", test_type="dynamic")
+
+    network = network_file.SimpleNeuralNetwork(input_dim=2)
+    network.train(measured_norm, real_norm, epochs=20, learning_rate=0.005)
+    network.save("model_weights2.pkl")  # końcowy zapis wag
+    test_model(network, input_scaler, output_scaler, "2", test_type="random")
+    test_model(network, input_scaler, output_scaler, "2", test_type="dynamic")
+
+    network = network_file.SimpleNeuralNetwork(input_dim=2)
+    network.train(measured_norm, real_norm, epochs=30, learning_rate=0.005)
+    network.save("model_weights3.pkl")  # końcowy zapis wag
+    test_model(network, input_scaler, output_scaler, "3", test_type="random")
+    test_model(network, input_scaler, output_scaler, "3", test_type="dynamic")
+
+    network = network_file.SimpleNeuralNetwork(input_dim=2)
+    network.train(measured_norm, real_norm, epochs=40, learning_rate=0.005)
+    network.save("model_weights3.pkl")  # końcowy zapis wag
+    test_model(network, input_scaler, output_scaler, "4", test_type="random")
+    test_model(network, input_scaler, output_scaler, "4", test_type="dynamic")
+
+    network = network_file.SimpleNeuralNetwork(input_dim=2)
+    network.train(measured_norm, real_norm, epochs=50, learning_rate=0.005)
+    network.save("model_weights3.pkl")  # końcowy zapis wag
+    test_model(network, input_scaler, output_scaler, "5", test_type="random")
+    test_model(network, input_scaler, output_scaler, "5", test_type="dynamic")
+
+    network.train(measured_norm, real_norm, epochs=10, learning_rate=0.001)
+    network.save("model_weights1.pkl")  # końcowy zapis wag
+    test_model(network, input_scaler, output_scaler, "6", test_type="random")
+    test_model(network, input_scaler, output_scaler, "6", test_type="dynamic")
+
+    network = network_file.SimpleNeuralNetwork(input_dim=2)
+    network.train(measured_norm, real_norm, epochs=20, learning_rate=0.001)
+    network.save("model_weights2.pkl")  # końcowy zapis wag
+    test_model(network, input_scaler, output_scaler, "7", test_type="random")
+    test_model(network, input_scaler, output_scaler, "7", test_type="dynamic")
+
+    network = network_file.SimpleNeuralNetwork(input_dim=2)
+    network.train(measured_norm, real_norm, epochs=30, learning_rate=0.001)
+    network.save("model_weights3.pkl")  # końcowy zapis wag
+    test_model(network, input_scaler, output_scaler, "8", test_type="random")
+    test_model(network, input_scaler, output_scaler, "8", test_type="dynamic")
+
+    network = network_file.SimpleNeuralNetwork(input_dim=2)
+    network.train(measured_norm, real_norm, epochs=40, learning_rate=0.001)
+    network.save("model_weights3.pkl")  # końcowy zapis wag
+    test_model(network, input_scaler, output_scaler, "9", test_type="random")
+    test_model(network, input_scaler, output_scaler, "9", test_type="dynamic")
+
+    network = network_file.SimpleNeuralNetwork(input_dim=2)
     network.train(measured_norm, real_norm, epochs=50, learning_rate=0.001)
-    network.save("model_weights.pkl")  # końcowy zapis wag
+    network.save("model_weights3.pkl")  # końcowy zapis wag
+    test_model(network, input_scaler, output_scaler, "10", test_type="random")
+    test_model(network, input_scaler, output_scaler, "10", test_type="dynamic")
+
+
 # measured, real = file_reader.read_all_static_files_from_directory("data", 1)
 # save_and_plot_cdf_before_filtering(measured, real)
-test_model(network, measured_mean, measured_std, real_mean, real_std, test_type="random")
-test_model(network, measured_mean, measured_std, real_mean, real_std, test_type="dynamic")
+test_model(network, input_scaler, output_scaler, test_type="random")
+test_model(network, input_scaler, output_scaler, test_type="dynamic")

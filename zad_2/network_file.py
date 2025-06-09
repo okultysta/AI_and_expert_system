@@ -50,17 +50,20 @@ class DenseLayer:
 # Sieć neuronowa z obsługą zapisu/odczytu
 class SimpleNeuralNetwork:
     def __init__(self, input_dim):
-        self.layer1 = DenseLayer(input_dim, 64, activation=relu, activation_derivative=relu_derivative)
-        self.layer2 = DenseLayer(64, 32, activation=relu, activation_derivative=relu_derivative)
-        self.output_layer = DenseLayer(32, 2, activation=linear, activation_derivative=linear_derivative)
+        self.layer1 = DenseLayer(input_dim, 128, activation=relu, activation_derivative=relu_derivative)
+        self.layer2 = DenseLayer(128, 64, activation=relu, activation_derivative=relu_derivative)
+        self.layer3 = DenseLayer(64, 16, activation=relu, activation_derivative=relu_derivative)
+        self.output_layer = DenseLayer(16, 2, activation=linear, activation_derivative=linear_derivative)
 
     def forward(self, x):
         x = self.layer1.forward(x)
         x = self.layer2.forward(x)
+        x = self.layer3.forward(x)
         return self.output_layer.forward(x)
 
     def backward(self, loss_grad, learning_rate):
         grad = self.output_layer.backward(loss_grad, learning_rate)
+        grad = self.layer3.backward(grad, learning_rate)
         grad = self.layer2.backward(grad, learning_rate)
         self.layer1.backward(grad, learning_rate)
 
@@ -68,12 +71,14 @@ class SimpleNeuralNetwork:
         return {
             'layer1': self.layer1.get_params(),
             'layer2': self.layer2.get_params(),
+            'layer3': self.layer3.get_params(),
             'output_layer': self.output_layer.get_params()
         }
 
     def set_all_params(self, params):
         self.layer1.set_params(params['layer1'])
         self.layer2.set_params(params['layer2'])
+        self.layer3.set_params(params['layer3'])
         self.output_layer.set_params(params['output_layer'])
 
     def save(self, filename="model_weights.pkl"):
