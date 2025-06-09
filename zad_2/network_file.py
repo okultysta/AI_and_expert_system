@@ -15,6 +15,20 @@ def linear(x):
 def linear_derivative(x):
     return np.ones_like(x)
 
+def tanh(x):
+    return np.tanh(x)
+
+def tanh_derivative(x):
+    return 1 - np.tanh(x) ** 2
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def sigmoid_derivative(x):
+    s = sigmoid(x)
+    return s * (1 - s)
+
+
 # Warstwa Dense z możliwością zapisu i wczytywania
 class DenseLayer:
     def __init__(self, input_dim, output_dim, activation=linear, activation_derivative=None):
@@ -50,10 +64,11 @@ class DenseLayer:
 # Sieć neuronowa z obsługą zapisu/odczytu
 class SimpleNeuralNetwork:
     def __init__(self, input_dim):
-        self.layer1 = DenseLayer(input_dim, 128, activation=relu, activation_derivative=relu_derivative)
-        self.layer2 = DenseLayer(128, 64, activation=relu, activation_derivative=relu_derivative)
-        self.layer3 = DenseLayer(64, 16, activation=relu, activation_derivative=relu_derivative)
-        self.output_layer = DenseLayer(16, 2, activation=linear, activation_derivative=linear_derivative)
+        # Przykładowa struktura z 3 warstwami
+        self.layer1 = DenseLayer(input_dim, 128, activation=sigmoid, activation_derivative=sigmoid_derivative)
+        self.layer2 = DenseLayer(128, 64, activation=sigmoid, activation_derivative=sigmoid_derivative)
+        self.layer3 = DenseLayer(64, 32, activation=sigmoid, activation_derivative=sigmoid_derivative)
+        self.output_layer = DenseLayer(32, 2, activation=linear, activation_derivative=linear_derivative)
 
     def forward(self, x):
         x = self.layer1.forward(x)
@@ -71,14 +86,12 @@ class SimpleNeuralNetwork:
         return {
             'layer1': self.layer1.get_params(),
             'layer2': self.layer2.get_params(),
-            'layer3': self.layer3.get_params(),
             'output_layer': self.output_layer.get_params()
         }
 
     def set_all_params(self, params):
         self.layer1.set_params(params['layer1'])
         self.layer2.set_params(params['layer2'])
-        self.layer3.set_params(params['layer3'])
         self.output_layer.set_params(params['output_layer'])
 
     def save(self, filename="model_weights.pkl"):
